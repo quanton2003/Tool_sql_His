@@ -110,6 +110,7 @@ export default function Settings() {
         { key: 'HIS_DB_SCHEMA', value: values.schema },
       ];
       await Promise.all(settings.map((s) => api.put(`/settings/${s.key}`, { value: s.value })));
+      await api.post('/database/company/reload-config');
       message.success('Đã lưu cấu hình Company Database');
     } catch {
       message.error('Lưu cấu hình thất bại');

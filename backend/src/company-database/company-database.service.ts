@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Pool, PoolClient } from 'pg';
+import { SettingsService } from '../settings/settings.service';
 
 export interface SchemaInfo {
   schema_name: string;
@@ -39,17 +39,42 @@ export class CompanyDatabaseService {
   private readonly logger = new Logger(CompanyDatabaseService.name);
   private pool: Pool | null = null;
   private connected = false;
+  private configLoaded = false;
 
-  constructor(private configService: ConfigService) {}
+  constructor(private readonly settingsService: SettingsService) {}
 
-  private getPool(): Pool {
+  async loadConfig() {
+    const host = await this.settingsService.findOne('HIS_DB_HOST');
+    const port = await this.settingsService.findOne('HIS_DB_PORT');
+    const database = await this.settingsService.findOne('HIS_DB_NAME');
+    const user = await this.settingsService.findOne('HIS_DB_USER');
+    const password = await this.settingsService.findOne('HIS_DB_PASSWORD');
+    const schema = await this.settingsService.findOne('HIS_DB_SCHEMA');
+
+    if (!host || !database || !user) {
+      throw new Error('Chưa cấu hình Company Database. Vào Settings để cấu hình.');
+    }
+
+    return {
+      host,
+      port: Number(port) || 5432,
+      database,
+      user,
+      password: password || '',
+      schema: schema || 'public',
+    };
+  }
+
+  async getPool(): Promise<Pool> {
+    const config = await this.loadConfig();
     if (!this.pool) {
       this.pool = new Pool({
-        host: this.configService.get<string>('HIS_DB_HOST', 'localhost'),
-        port: this.configService.get<number>('HIS_DB_PORT', 5432),
-        database: this.configService.get<string>('HIS_DB_NAME', 'his_db'),
-        user: this.configService.get<string>('HIS_DB_USER', 'his_readonly'),
-        password: this.configService.get<string>('HIS_DB_PASSWORD', ''),
+        host: config.host,
+        port: config.port,
+        database: config.database,
+        user: config.user,
+        password: config.password,
+        ssl: false,
         max: 5,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
@@ -58,8 +83,19 @@ export class CompanyDatabaseService {
     return this.pool;
   }
 
+  async reload() {
+    if (this.pool) {
+      try {
+        await this.pool.end();
+      } catch {
+        // ignore
+      }
+      this.pool = null;
+    }
+  }
+
   async getSchemas(): Promise<SchemaInfo[]> {
-    const client = await this.getPool().connect();
+    const client = await (await this.getPool()).connect();
     try {
       const result = await client.query<SchemaInfo>(`
         SELECT schema_name
@@ -74,18 +110,13 @@ export class CompanyDatabaseService {
   }
 
   async getTables(schemaName: string = 'public'): Promise<TableInfo[]> {
-    const client = await this.getPool().connect();
+    const client = await (await this.getPool()).connect();
     try {
       const result = await client.query<TableInfo>(`
-        SELECT 
-          t.table_schema,
-          t.table_name,
-          t.table_type,
-          obj_description(('"' || t.table_schema || '"."' || t.table_name || '"')::regclass) AS description
-        FROM information_schema.tables t
-        WHERE t.table_schema = $1
-          AND t.table_type = 'BASE TABLE'
-        ORDER BY t.table_name
+        SELECT schemaname AS table_schema, tablename AS table_name, 'BASE TABLE' AS table_type
+        FROM pg_catalog.pg_tables
+        WHERE schemaname = $1
+        ORDER BY tablename
       `, [schemaName]);
       return result.rows;
     } finally {
@@ -94,19 +125,14 @@ export class CompanyDatabaseService {
   }
 
   async searchTables(query: string, schemaName: string = 'public'): Promise<TableInfo[]> {
-    const client = await this.getPool().connect();
+    const client = await (await this.getPool()).connect();
     try {
       const result = await client.query<TableInfo>(`
-        SELECT 
-          t.table_schema,
-          t.table_name,
-          t.table_type,
-          obj_description(('"' || t.table_schema || '"."' || t.table_name || '"')::regclass) AS description
-        FROM information_schema.tables t
-        WHERE t.table_schema = $1
-          AND t.table_type = 'BASE TABLE'
-          AND t.table_name ILIKE $2
-        ORDER BY t.table_name
+        SELECT schemaname AS table_schema, tablename AS table_name, 'BASE TABLE' AS table_type
+        FROM pg_catalog.pg_tables
+        WHERE schemaname = $1
+          AND tablename ILIKE $2
+        ORDER BY tablename
       `, [schemaName, `%${query}%`]);
       return result.rows;
     } finally {
@@ -115,47 +141,53 @@ export class CompanyDatabaseService {
   }
 
   async getTableColumns(tableName: string, schemaName: string = 'public'): Promise<ColumnInfo[]> {
-    const client = await this.getPool().connect();
+    const client = await (await this.getPool()).connect();
     try {
       const columnsResult = await client.query(`
         SELECT 
-          c.column_name,
-          c.data_type,
-          c.is_nullable,
-          c.column_default
-        FROM information_schema.columns c
-        WHERE c.table_schema = $1 AND c.table_name = $2
-        ORDER BY c.ordinal_position
+          a.attname AS column_name,
+          pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+          CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS is_nullable,
+          pg_catalog.pg_get_expr(d.adbin, d.adrelid) AS column_default
+        FROM pg_catalog.pg_attribute a
+        LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+        WHERE a.attrelid = ($1 || '.' || $2)::regclass::oid
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+        ORDER BY a.attnum
       `, [schemaName, tableName]);
 
       const pkResult = await client.query<PrimaryKeyInfo>(`
-        SELECT kcu.column_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-          AND tc.table_schema = kcu.table_schema
-        WHERE tc.constraint_type = 'PRIMARY KEY'
-          AND tc.table_schema = $1
-          AND tc.table_name = $2
+        SELECT a.attname AS column_name
+        FROM pg_catalog.pg_index i
+        JOIN pg_catalog.pg_class c ON c.oid = i.indrelid
+        JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
+        WHERE n.nspname = $1
+          AND c.relname = $2
+          AND i.indisprimary
+        ORDER BY a.attnum
       `, [schemaName, tableName]);
 
-      const pkColumns = new Set(pkResult.rows.map((r) => r.column_name));
+      const pkColumns = new Set<string>(pkResult.rows.map((r) => r.column_name));
 
       const fkResult = await client.query<ForeignKeyInfo>(`
         SELECT 
-          kcu.column_name,
-          ccu.table_schema AS foreign_table_schema,
-          ccu.table_name AS foreign_table_name,
-          ccu.column_name AS foreign_column_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-          AND tc.table_schema = kcu.table_schema
-        JOIN information_schema.constraint_column_usage ccu
-          ON tc.constraint_name = ccu.constraint_name
-        WHERE tc.constraint_type = 'FOREIGN KEY'
-          AND tc.table_schema = $1
-          AND tc.table_name = $2
+          a.attname AS column_name,
+          n2.nspname AS foreign_table_schema,
+          c2.relname AS foreign_table_name,
+          a2.attname AS foreign_column_name
+        FROM pg_catalog.pg_constraint con
+        JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+        JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = con.conkey[1]
+        JOIN pg_catalog.pg_class c2 ON c2.oid = con.confrelid
+        JOIN pg_catalog.pg_namespace n2 ON n2.oid = c2.relnamespace
+        JOIN pg_catalog.pg_attribute a2 ON a2.attrelid = c2.oid AND a2.attnum = con.confkey[1]
+        WHERE n.nspname = $1
+          AND c.relname = $2
+          AND con.contype = 'f'
+        ORDER BY a.attnum
       `, [schemaName, tableName]);
 
       const fkMap = new Map<string, ForeignKeyInfo>();
@@ -179,24 +211,26 @@ export class CompanyDatabaseService {
   }
 
   async getTableRelations(tableName: string, schemaName: string = 'public'): Promise<ForeignKeyInfo[]> {
-    const client = await this.getPool().connect();
+    const client = await (await this.getPool()).connect();
     try {
       const result = await client.query<ForeignKeyInfo>(`
         SELECT 
-          tc.constraint_name,
-          kcu.column_name,
-          ccu.table_schema AS foreign_table_schema,
-          ccu.table_name AS foreign_table_name,
-          ccu.column_name AS foreign_column_name
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-          AND tc.table_schema = kcu.table_schema
-        JOIN information_schema.constraint_column_usage ccu
-          ON tc.constraint_name = ccu.constraint_name
-        WHERE tc.constraint_type = 'FOREIGN KEY'
-          AND tc.table_schema = $1
-          AND tc.table_name = $2
+          con.conname AS constraint_name,
+          a.attname AS column_name,
+          n2.nspname AS foreign_table_schema,
+          c2.relname AS foreign_table_name,
+          a2.attname AS foreign_column_name
+        FROM pg_catalog.pg_constraint con
+        JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+        JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = con.conkey[1]
+        JOIN pg_catalog.pg_class c2 ON c2.oid = con.confrelid
+        JOIN pg_catalog.pg_namespace n2 ON n2.oid = c2.relnamespace
+        JOIN pg_catalog.pg_attribute a2 ON a2.attrelid = c2.oid AND a2.attnum = con.confkey[1]
+        WHERE n.nspname = $1
+          AND c.relname = $2
+          AND con.contype = 'f'
+        ORDER BY a.attnum
       `, [schemaName, tableName]);
       return result.rows;
     } finally {
@@ -206,7 +240,8 @@ export class CompanyDatabaseService {
 
   async testConnection(): Promise<boolean> {
     try {
-      const client = await this.getPool().connect();
+      await this.reload();
+      const client = await (await this.getPool()).connect();
       try {
         await client.query('SELECT 1');
         this.connected = true;

@@ -116,8 +116,11 @@ export default function TraCuuDatabase() {
   const handleSyncSchema = async () => {
     setLoading(true);
     try {
+      const settingsResponse = await api.get('/settings');
+      const settings = settingsResponse.data;
+      const databaseName = settings['HIS_DB_NAME'] || 'test_bvducgiang';
       const response = await api.post('/database/company/sync-schema', {
-        databaseName: 'his_db',
+        databaseName,
         schemaName: selectedSchema,
       });
       if (response.data.status === 'success') {

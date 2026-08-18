@@ -21,7 +21,7 @@ export class SettingsService {
 
   async findOne(key: string) {
     const setting = await this.settingRepository.findOne({ where: { key } });
-    return setting?.value || null;
+    return setting?.value ?? null;
   }
 
   async create(key: string, value: string) {
