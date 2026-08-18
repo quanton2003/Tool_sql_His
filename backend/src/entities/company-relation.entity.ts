@@ -1,0 +1,27 @@
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { CompanyTable } from './company-table.entity';
+
+@Entity('company_relations')
+export class CompanyRelation {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  tableId: number;
+
+  @Column()
+  constraintName: string;
+
+  @Column()
+  columnName: string;
+
+  @Column()
+  foreignTableName: string;
+
+  @Column()
+  foreignColumnName: string;
+
+  @ManyToOne(() => CompanyTable)
+  @JoinColumn({ name: 'tableId' })
+  table: CompanyTable;
+}
