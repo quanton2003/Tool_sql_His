@@ -25,12 +25,12 @@ export class ChucNangService {
     return item;
   }
 
-  async create(data: { ten: string; moTa: string; trangThai: string }) {
+  async create(data: { ten: string; moTa: string; trangThai: string; sql?: string }) {
     const item = this.chucNangRepository.create(data);
     return this.chucNangRepository.save(item);
   }
 
-  async update(id: number, data: { ten?: string; moTa?: string; trangThai?: string }) {
+  async update(id: number, data: { ten?: string; moTa?: string; trangThai?: string; sql?: string }) {
     await this.chucNangRepository.update(id, data);
     return this.findOne(id);
   }

@@ -83,6 +83,16 @@ export class CompanyDatabaseService {
     return this.pool;
   }
 
+  async getClient(): Promise<PoolClient> {
+    try {
+      return await (await this.getPool()).connect();
+    } catch (error) {
+      this.logger.warn('Pool connection failed, recreating pool...', (error as Error).message);
+      await this.reload();
+      return await (await this.getPool()).connect();
+    }
+  }
+
   async reload() {
     if (this.pool) {
       try {
@@ -95,7 +105,7 @@ export class CompanyDatabaseService {
   }
 
   async getSchemas(): Promise<SchemaInfo[]> {
-    const client = await (await this.getPool()).connect();
+    const client = await this.getClient();
     try {
       const result = await client.query<SchemaInfo>(`
         SELECT schema_name
@@ -110,7 +120,7 @@ export class CompanyDatabaseService {
   }
 
   async getTables(schemaName: string = 'public'): Promise<TableInfo[]> {
-    const client = await (await this.getPool()).connect();
+    const client = await this.getClient();
     try {
       const result = await client.query<TableInfo>(`
         SELECT schemaname AS table_schema, tablename AS table_name, 'BASE TABLE' AS table_type
@@ -125,7 +135,7 @@ export class CompanyDatabaseService {
   }
 
   async searchTables(query: string, schemaName: string = 'public'): Promise<TableInfo[]> {
-    const client = await (await this.getPool()).connect();
+    const client = await this.getClient();
     try {
       const result = await client.query<TableInfo>(`
         SELECT schemaname AS table_schema, tablename AS table_name, 'BASE TABLE' AS table_type
@@ -141,7 +151,7 @@ export class CompanyDatabaseService {
   }
 
   async getTableColumns(tableName: string, schemaName: string = 'public'): Promise<ColumnInfo[]> {
-    const client = await (await this.getPool()).connect();
+    const client = await this.getClient();
     try {
       const columnsResult = await client.query(`
         SELECT 
@@ -211,7 +221,7 @@ export class CompanyDatabaseService {
   }
 
   async getTableRelations(tableName: string, schemaName: string = 'public'): Promise<ForeignKeyInfo[]> {
-    const client = await (await this.getPool()).connect();
+    const client = await this.getClient();
     try {
       const result = await client.query<ForeignKeyInfo>(`
         SELECT 
@@ -240,8 +250,10 @@ export class CompanyDatabaseService {
 
   async testConnection(): Promise<boolean> {
     try {
+      const config = await this.loadConfig();
+      this.logger.log(`Testing connection to ${config.host}:${config.port}/${config.database} as ${config.user}`);
       await this.reload();
-      const client = await (await this.getPool()).connect();
+      const client = await this.getClient();
       try {
         await client.query('SELECT 1');
         this.connected = true;
@@ -250,7 +262,7 @@ export class CompanyDatabaseService {
         client.release();
       }
     } catch (error) {
-      this.logger.error('Failed to connect to HIS database', error);
+      this.logger.error('Failed to connect to HIS database', (error as Error).stack || (error as Error).message);
       this.connected = false;
       return false;
     }

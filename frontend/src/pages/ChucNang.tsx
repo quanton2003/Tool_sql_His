@@ -10,6 +10,7 @@ interface ChucNangItem {
   ten: string;
   moTa: string;
   trangThai: 'active' | 'inactive';
+  sql?: string;
 }
 
 export default function ChucNang() {
@@ -87,6 +88,13 @@ export default function ChucNang() {
     { title: 'Tên chức năng', dataIndex: 'ten', key: 'ten' },
     { title: 'Mô tả', dataIndex: 'moTa', key: 'moTa' },
     {
+      title: 'SQL',
+      dataIndex: 'sql',
+      key: 'sql',
+      ellipsis: true,
+      render: (sql: string) => sql ? <code>{sql}</code> : '-',
+    },
+    {
       title: 'Trạng thái',
       dataIndex: 'trangThai',
       key: 'trangThai',
@@ -140,6 +148,9 @@ export default function ChucNang() {
           </Form.Item>
           <Form.Item label="Mô tả" name="moTa" rules={[{ required: true, message: 'Vui lòng nhập mô tả' }]}>
             <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label="SQL" name="sql">
+            <Input.TextArea rows={6} placeholder="Nhập SQL đã sử dụng..." />
           </Form.Item>
           <Form.Item label="Trạng thái" name="trangThai" initialValue="active">
             <Input />

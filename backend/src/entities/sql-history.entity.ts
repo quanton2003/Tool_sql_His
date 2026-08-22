@@ -14,6 +14,15 @@ export class SqlHistory {
   @Column({ default: 'generated' })
   status: string;
 
+  @Column({ default: 'read' })
+  type: string;
+
+  @Column({ nullable: true })
+  executionTime: number;
+
+  @Column({ nullable: true })
+  rowCount: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }

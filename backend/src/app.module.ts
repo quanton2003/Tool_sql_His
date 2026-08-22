@@ -8,6 +8,7 @@ import { ChucNangModule } from './chuc-nang/chuc-nang.module';
 import { DatabaseExplorerModule } from './database-explorer/database-explorer.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { SettingsModule } from './settings/settings.module';
+import { SqlQueryModule } from './sql-query/sql-query.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SettingsModule } from './settings/settings.module';
     DatabaseExplorerModule,
     KnowledgeModule,
     SettingsModule,
+    SqlQueryModule,
   ],
   controllers: [],
   providers: [],

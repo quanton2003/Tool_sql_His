@@ -21,20 +21,12 @@ export class SettingsController {
 
   @Post()
   async create(@Body() body: { key: string; value: string }) {
-    const result = await this.settingsService.create(body.key, body.value);
-    if (body.key.startsWith('HIS_DB_')) {
-      await this.companyDatabaseService.reload();
-    }
-    return result;
+    return this.settingsService.create(body.key, body.value);
   }
 
   @Put(':key')
   async update(@Param('key') key: string, @Body() body: { value: string }) {
-    const result = await this.settingsService.update(key, body.value);
-    if (key.startsWith('HIS_DB_')) {
-      await this.companyDatabaseService.reload();
-    }
-    return result;
+    return this.settingsService.update(key, body.value);
   }
 }
 

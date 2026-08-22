@@ -6,6 +6,7 @@ const { Header, Sider, Content } = Layout;
 const menuItems = [
   { key: '/app', label: 'Dashboard', icon: null },
   { key: '/app/chuc-nang', label: 'Chức năng', icon: null },
+  { key: '/app/sql-query', label: 'SQL Query', icon: null },
   { key: '/app/tra-cuu-database', label: 'Tra cứu Database', icon: null },
   { key: '/app/knowledge', label: 'Knowledge', icon: null },
   { key: '/app/history', label: 'SQL History', icon: null },

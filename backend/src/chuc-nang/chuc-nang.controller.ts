@@ -16,12 +16,12 @@ export class ChucNangController {
   }
 
   @Post()
-  create(@Body() data: { ten: string; moTa: string; trangThai: string }) {
+  create(@Body() data: { ten: string; moTa: string; trangThai: string; sql?: string }) {
     return this.chucNangService.create(data);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() data: { ten?: string; moTa?: string; trangThai?: string }) {
+  update(@Param('id') id: string, @Body() data: { ten?: string; moTa?: string; trangThai?: string; sql?: string }) {
     return this.chucNangService.update(Number(id), data);
   }
 

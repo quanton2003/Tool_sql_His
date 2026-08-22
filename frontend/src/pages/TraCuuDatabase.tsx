@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, Typography, Input, Table, Tag, Space, Tabs, Empty, Alert, Button, Select, message, Statistic, Row, Col } from 'antd';
-import { SearchOutlined, DatabaseOutlined, ReloadOutlined, CloudSyncOutlined } from '@ant-design/icons';
+import { SearchOutlined, DatabaseOutlined, ReloadOutlined, CloudSyncOutlined, CodeOutlined } from '@ant-design/icons';
 import api from '../services/api';
 
 const { Title, Text } = Typography;
@@ -32,6 +33,7 @@ interface SnapshotInfo {
 }
 
 export default function TraCuuDatabase() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [selectedTable, setSelectedTable] = useState<TableInfo | null>(null);
   const [schemas, setSchemas] = useState<string[]>([]);
@@ -79,6 +81,11 @@ export default function TraCuuDatabase() {
   const handleTableClick = (table: TableInfo) => {
     setSelectedTable(table);
     fetchColumns(table.table_name);
+  };
+
+  const handleOpenInSqlQuery = (table: TableInfo) => {
+    const sql = `SELECT * FROM public.${table.table_name} LIMIT 100;`;
+    navigate('/app/sql-query', { state: { sql } });
   };
 
   const handleSearch = async () => {
@@ -174,6 +181,15 @@ export default function TraCuuDatabase() {
     { title: 'Tên bảng', dataIndex: 'table_name', key: 'table_name', render: (text: string) => <a onClick={() => handleTableClick({ table_name: text, table_schema: selectedSchema, table_type: 'BASE TABLE' } as TableInfo)}>{text}</a> },
     { title: 'Schema', dataIndex: 'table_schema', key: 'table_schema' },
     { title: 'Mô tả', dataIndex: 'description', key: 'description' },
+    {
+      title: 'Thao tác',
+      key: 'action',
+      render: (_: unknown, record: TableInfo) => (
+        <Button type="link" size="small" icon={<CodeOutlined />} onClick={() => handleOpenInSqlQuery(record)}>
+          SQL Query
+        </Button>
+      ),
+    },
   ];
 
   const columnColumns = [

@@ -14,6 +14,9 @@ export class ChucNang {
   @Column({ default: 'active' })
   trangThai: string;
 
+  @Column({ type: 'text', nullable: true })
+  sql: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

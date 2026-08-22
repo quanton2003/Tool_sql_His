@@ -5,6 +5,7 @@ import viVN from 'antd/locale/vi_VN';
 import AppLayout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ChucNang from './pages/ChucNang';
+import SqlQuery from './pages/SqlQuery';
 import TraCuuDatabase from './pages/TraCuuDatabase';
 import Knowledge from './pages/Knowledge';
 import SqlHistory from './pages/SqlHistory';
@@ -95,6 +96,7 @@ function App() {
           <Route path="/app" element={<AppLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="chuc-nang" element={<ChucNang />} />
+            <Route path="sql-query" element={<SqlQuery />} />
             <Route path="tra-cuu-database" element={<TraCuuDatabase />} />
             <Route path="knowledge" element={<Knowledge />} />
             <Route path="history" element={<SqlHistory />} />
