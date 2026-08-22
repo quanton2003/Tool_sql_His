@@ -9,6 +9,7 @@ import { DatabaseExplorerModule } from './database-explorer/database-explorer.mo
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { SettingsModule } from './settings/settings.module';
 import { SqlQueryModule } from './sql-query/sql-query.module';
+import { DatabaseProfilesModule } from './database-profiles/database-profiles.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SqlQueryModule } from './sql-query/sql-query.module';
     KnowledgeModule,
     SettingsModule,
     SqlQueryModule,
+    DatabaseProfilesModule,
   ],
   controllers: [],
   providers: [],

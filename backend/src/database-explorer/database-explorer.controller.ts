@@ -135,7 +135,6 @@ export class DatabaseExplorerController {
 
   @Post('company/test-connection')
   async testConnection() {
-    const connected = await this.companyDatabaseService.testConnection();
-    return { connected };
+    return this.companyDatabaseService.testConnection();
   }
 }

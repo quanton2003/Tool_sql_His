@@ -29,4 +29,9 @@ export class KnowledgeController {
   remove(@Param('id') id: string) {
     return this.knowledgeService.remove(Number(id));
   }
+
+  @Post('reset-and-refresh-examples')
+  resetAndRefreshExamples() {
+    return this.knowledgeService.resetAndRefreshFromSnapshot();
+  }
 }

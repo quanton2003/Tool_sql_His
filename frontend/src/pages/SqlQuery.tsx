@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Layout, Button, Table, Tag, Space, Typography, message, Drawer, Tooltip, Alert, Statistic, Row, Col, Tree } from 'antd';
+import { Layout, Button, Table, Tag, Space, Typography, message, Drawer, Tooltip, Alert, Statistic, Row, Col, Tree, Input } from 'antd';
 import { PlayCircleOutlined, ClearOutlined, FormatPainterOutlined, DatabaseOutlined, HistoryOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import Editor from '@monaco-editor/react';
 import api from '../services/api';
@@ -71,6 +71,7 @@ export default function SqlQuery() {
   const [schemaData, setSchemaData] = useState<{ schemas: SchemaItem[]; tables: TableItem[]; columns: ColumnItem[]; relations: RelationItem[] }>({ schemas: [], tables: [], columns: [], relations: [] });
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [paramsText, setParamsText] = useState('{}');
   const editorRef = useRef<any>(null);
 
   useEffect(() => {
@@ -103,10 +104,18 @@ export default function SqlQuery() {
       return;
     }
 
+    let params: Record<string, unknown> = {};
+    try {
+      params = JSON.parse(paramsText || '{}');
+      if (!params || Array.isArray(params) || typeof params !== 'object') throw new Error();
+    } catch {
+      message.error('Tham số phải là JSON dạng object, ví dụ {"patient_id": 26135920}');
+      return;
+    }
     setLoading(true);
     setResult(null);
     try {
-      const response = await api.post('/sql-query/execute', { sql, request: sql });
+      const response = await api.post('/sql-query/execute', { sql, request: sql, params });
       setResult(response.data.result);
       message.success(`Thực thi thành công. ${response.data.result.rowCount} rows.`);
       fetchSchema();
@@ -290,6 +299,15 @@ export default function SqlQuery() {
                 folding: true,
                 formatOnPaste: true,
               }}
+            />
+          </div>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #243940' }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 5, fontSize: 12 }}>Tham số JSON</Text>
+            <Input.TextArea
+              value={paramsText}
+              onChange={(event) => setParamsText(event.target.value)}
+              autoSize={{ minRows: 1, maxRows: 3 }}
+              placeholder='Tham số JSON, ví dụ: {"patient_id": 26135920}'
             />
           </div>
 

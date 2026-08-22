@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, Input, Button, Typography, Space, Tag, message } from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import api from '../services/api';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -21,12 +21,12 @@ export default function SqlAssistant() {
     setResult(null);
 
     try {
-      const response = await axios.post('http://localhost:3000/api/sql-assistant/generate', {
+      const response = await api.post('/sql-query/ai/generate', {
         request,
       });
       setResult(response.data);
-    } catch {
-      message.error('Không thể tạo SQL. Vui lòng thử lại sau.');
+    } catch (error: any) {
+      message.error(error?.response?.data?.message || 'Không thể tạo SQL. Hãy đồng bộ schema trước.');
     } finally {
       setLoading(false);
     }

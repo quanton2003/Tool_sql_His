@@ -6,8 +6,8 @@ export class SqlQueryController {
   constructor(private readonly sqlQueryService: SqlQueryService) {}
 
   @Post('execute')
-  async execute(@Body() body: { sql: string; request?: string }) {
-    return this.sqlQueryService.executeQuery(body.sql, body.request);
+  async execute(@Body() body: { sql: string; request?: string; params?: Record<string, unknown> }) {
+    return this.sqlQueryService.executeQuery(body.sql, body.request, body.params || {});
   }
 
   @Post('validate')

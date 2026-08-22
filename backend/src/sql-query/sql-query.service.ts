@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { SqlHistory } from '../entities/sql-history.entity';
@@ -9,6 +9,7 @@ import { CompanyTable } from '../entities/company-table.entity';
 import { CompanyColumn } from '../entities/company-column.entity';
 import { CompanyRelation } from '../entities/company-relation.entity';
 import { CompanyDbSnapshot } from '../entities/company-db-snapshot.entity';
+import { Knowledge } from '../entities/knowledge.entity';
 
 export interface AutocompleteItem {
   label: string;
@@ -53,10 +54,16 @@ export class SqlQueryService {
     private readonly columnRepository: Repository<CompanyColumn>,
     @InjectRepository(CompanyRelation)
     private readonly relationRepository: Repository<CompanyRelation>,
+    @InjectRepository(Knowledge)
+    private readonly knowledgeRepository: Repository<Knowledge>,
   ) {}
 
   validateSql(sql: string): ValidationResult {
     const normalized = sql.trim().replace(/\s+/g, ' ');
+    const statementCount = normalized.split(';').map((part) => part.trim()).filter(Boolean).length;
+    if (statementCount !== 1) {
+      return { valid: false, type: 'write', message: 'Chỉ cho phép thực thi một câu SQL mỗi lần.' };
+    }
     const upper = normalized.toUpperCase();
 
     for (const keyword of this.WRITE_KEYWORDS) {
@@ -81,16 +88,28 @@ export class SqlQueryService {
     return { valid: true, type: 'read' };
   }
 
-  async executeQuery(sql: string, request?: string): Promise<{ result: QueryResult; history: SqlHistory }> {
+  async executeQuery(sql: string, request?: string, params: Record<string, unknown> = {}): Promise<{ result: QueryResult; history: SqlHistory }> {
     const validation = this.validateSql(sql);
     if (!validation.valid) {
       throw new Error(validation.message);
     }
 
     const startTime = Date.now();
+    const boundParameters: unknown[] = [];
+    const parameterIndexes = new Map<string, number>();
+    const executableSql = sql.replace(/(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)/g, (_match, name: string) => {
+      if (!Object.prototype.hasOwnProperty.call(params, name)) {
+        throw new BadRequestException(`Thiếu tham số :${name}. Nhập trong ô Tham số JSON.`);
+      }
+      if (!parameterIndexes.has(name)) {
+        parameterIndexes.set(name, boundParameters.length + 1);
+        boundParameters.push(params[name]);
+      }
+      return `$${parameterIndexes.get(name)}`;
+    });
     const client = await this.companyDatabaseService.getClient();
     try {
-      const queryResult = await client.query(sql);
+      const queryResult = await client.query(executableSql, boundParameters);
       const executionTime = Date.now() - startTime;
       const columns = queryResult.fields.map((f) => f.name);
       const rows = queryResult.rows;
@@ -98,7 +117,7 @@ export class SqlQueryService {
 
       const history = this.sqlHistoryRepository.create({
         request: request || sql,
-        sql,
+        sql: executableSql,
         status: 'success',
         type: validation.type,
         executionTime,
@@ -113,7 +132,7 @@ export class SqlQueryService {
     } catch (error) {
       const history = this.sqlHistoryRepository.create({
         request: request || sql,
-        sql,
+        sql: executableSql,
         status: 'error',
         type: validation.type,
         executionTime: Date.now() - startTime,
@@ -213,6 +232,105 @@ export class SqlQueryService {
   }
 
   async generateAiSql(request: string): Promise<{ sql: string; explanation?: string }> {
-    throw new Error('AI generation not implemented yet. Please integrate AI provider.');
+    const snapshot = await this.snapshotRepository.findOne({ where: { status: 'success' }, order: { createdAt: 'DESC' } });
+    if (!snapshot) throw new Error('Chưa có schema snapshot. Hãy đồng bộ cấu trúc trước.');
+
+    const [tables, knowledge] = await Promise.all([
+      this.tableRepository.find({ where: { snapshotId: snapshot.id } }),
+      this.knowledgeRepository.find({ where: { status: 'confirmed' } }),
+    ]);
+    const normalize = (value: string) => value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/đ/g, 'd');
+    const normalizedRequest = normalize(request);
+    const originalRequest = request.toLowerCase();
+    const hasPatientIntent = originalRequest.includes('bệnh nhân') || normalizedRequest.includes('benh') || normalizedRequest.includes('patient');
+    const hasMedicalRecordIntent = originalRequest.includes('khám') || normalizedRequest.includes('kham') || normalizedRequest.includes('ho so benh an') || normalizedRequest.includes('medical record') || normalizedRequest.includes('lich su');
+    const hasMedicineIntent = normalizedRequest.includes('thuoc') || normalizedRequest.includes('don thuoc') || normalizedRequest.includes('medication');
+    const hasServiceIntent = normalizedRequest.includes('dich vu') || normalizedRequest.includes('xet nghiem') || normalizedRequest.includes('can lam sang');
+    const explicitTable = tables.find((item) => normalizedRequest.includes(normalize(item.tableName)));
+    const preferredPatientTable = tables.find((item) => normalize(item.tableName) === 'tb_hc_benhnhan');
+    const scoredTables = tables.map((item) => {
+      const tableName = normalize(item.tableName);
+      let score = explicitTable?.tableName === item.tableName ? 100 : 0;
+      if (hasPatientIntent) {
+        if (/^tb_hc_benhnhan$/.test(tableName)) score += 30;
+        else if (/hc_benhnhan|patient/.test(tableName)) score += 10;
+        if (/medicalrecord/.test(tableName)) score -= 4;
+      }
+      if (hasMedicalRecordIntent) {
+        if (/medicalrecord/.test(tableName)) score += 10;
+        if (/hosobenhan|benh an/.test(tableName)) score += 7;
+      }
+      if (hasMedicineIntent && /medicine|thuoc|donthuoc/.test(tableName)) score += 10;
+      if (hasServiceIntent && /service|dichvu|cls|lab/.test(tableName)) score += 8;
+      return { item, score };
+    }).sort((left, right) => right.score - left.score);
+    const best = explicitTable
+      ? { item: explicitTable, score: 100 }
+      : hasPatientIntent && preferredPatientTable
+        ? { item: preferredPatientTable, score: 100 }
+        : scoredTables[0];
+    if (!best || best.score === 0) {
+      throw new BadRequestException('Chưa xác định được bảng phù hợp. Hãy ghi rõ tên bảng hoặc thêm Knowledge mô tả nghiệp vụ.');
+    }
+    const table = best.item;
+    if (!table) throw new Error('Schema chưa có bảng để sinh SQL.');
+
+    if (hasPatientIntent && /(day du|day du thong tin|lich su|kham|khoa|phong|chan doan|benh an)/.test(normalizedRequest)) {
+      const joinedSql = `SELECT
+  p."patientid" AS patient_id,
+  p."patientcode" AS patient_code,
+  p."patientname" AS patient_name,
+  p."birthdayyear" AS birth_year,
+  p."birthdaymonth" AS birth_month,
+  p."birthdayday" AS birth_day,
+  p."dm_gioitinhid" AS gender_id,
+  p."patientphone" AS phone,
+  p."diachi" AS address,
+  pr."patientrecordid" AS patient_record_id,
+  pr."patientrecorddate" AS reception_date,
+  pr."chandoandenkham" AS arrival_diagnosis,
+  pr."chandoandenkham_icd10" AS arrival_icd10,
+  mr."medicalrecordid" AS medical_record_id,
+  mr."medicalrecorddate" AS examination_date,
+  mr."departmentid" AS department_id,
+  d."departmentname" AS department_name,
+  mr."roomid" AS room_id,
+  r."roomname" AS room_name,
+  mr."chandoan" AS diagnosis,
+  mr."chandoan_icd10" AS diagnosis_icd10,
+  mr."lydokham" AS examination_reason,
+  mr."phuongphapdieutri" AS treatment_method,
+  mr."huongdieutri" AS treatment_plan
+FROM "${snapshot.schemaName}"."tb_patient" p
+LEFT JOIN "${snapshot.schemaName}"."tb_patientrecord" pr ON pr."patientid" = p."patientid"
+LEFT JOIN "${snapshot.schemaName}"."tb_medicalrecord" mr ON mr."patientrecordid" = pr."patientrecordid"
+LEFT JOIN "${snapshot.schemaName}"."tb_department" d ON d."departmentid" = mr."departmentid"
+LEFT JOIN "${snapshot.schemaName}"."tb_room" r ON r."roomid" = mr."roomid"
+LIMIT 100;`;
+      return {
+        sql: joinedSql,
+        explanation: 'Đã liên kết bệnh nhân -> lượt tiếp nhận -> hồ sơ khám -> khoa/phòng bằng các mã liên kết đã kiểm tra. Truy vấn chỉ đọc và chưa tự động thực thi.',
+      };
+    }
+
+    const tableKnowledge = knowledge.filter((item) => item.tableName.toLowerCase() === table.tableName.toLowerCase());
+    const columns = await this.columnRepository.find({ where: { tableId: table.id } });
+    const selectedColumns = tableKnowledge.length > 0
+      ? columns.filter((column) => tableKnowledge.some((item) => item.columnName === column.columnName))
+      : columns.sort((left, right) => {
+        const rank = (name: string) => /id|code|name|date|time|status|active/.test(normalize(name)) ? 0 : 1;
+        return rank(left.columnName) - rank(right.columnName);
+      });
+    const projection = (selectedColumns.length > 0 ? selectedColumns : columns).slice(0, 20).map((column) => `"${column.columnName}"`).join(', ');
+    const limit = /tat ca|toan bo|\ball\b/i.test(normalizedRequest) ? '' : '\nLIMIT 100';
+    const sql = `SELECT ${projection || '*'}\nFROM "${snapshot.schemaName}"."${table.tableName}"${limit};`;
+    return {
+      sql,
+      explanation: `Đã chọn bảng ${snapshot.schemaName}.${table.tableName} theo từ khóa và schema hiện có${tableKnowledge.length > 0 ? ', có dùng Knowledge đã xác nhận' : ''}. SQL chỉ đọc dữ liệu và không tự động thực thi.`,
+    };
   }
 }

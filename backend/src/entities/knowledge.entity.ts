@@ -17,6 +17,9 @@ export class Knowledge {
   @Column('text', { nullable: true })
   value: string;
 
+  @Column('text', { nullable: true })
+  exampleValue: string;
+
   @Column({ default: 'suggested' })
   status: string;
 

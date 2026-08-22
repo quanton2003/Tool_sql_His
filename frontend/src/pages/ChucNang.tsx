@@ -132,7 +132,7 @@ export default function ChucNang() {
             </Button>
           </div>
 
-          <Table rowKey="id" columns={columns} dataSource={data} pagination={false} loading={loading} />
+          <Table rowKey="id" columns={columns} dataSource={data} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} chức năng` }} loading={loading} />
         </Space>
       </Card>
 

@@ -248,7 +248,7 @@ export class CompanyDatabaseService {
     }
   }
 
-  async testConnection(): Promise<boolean> {
+  async testConnection(): Promise<{ connected: boolean; code?: string; message?: string; target?: string }> {
     try {
       const config = await this.loadConfig();
       this.logger.log(`Testing connection to ${config.host}:${config.port}/${config.database} as ${config.user}`);
@@ -257,14 +257,26 @@ export class CompanyDatabaseService {
       try {
         await client.query('SELECT 1');
         this.connected = true;
-        return true;
+        return { connected: true, target: `${config.host}:${config.port}/${config.database}` };
       } finally {
         client.release();
       }
     } catch (error) {
       this.logger.error('Failed to connect to HIS database', (error as Error).stack || (error as Error).message);
       this.connected = false;
-      return false;
+      const connectionError = error as Error & { code?: string };
+      const messages: Record<string, string> = {
+        '28P01': 'Sai username hoặc password PostgreSQL.',
+        '3D000': 'Database không tồn tại.',
+        ECONNREFUSED: 'Không thể kết nối: PostgreSQL từ chối kết nối.',
+        ENOTFOUND: 'Không tìm thấy host database.',
+        ETIMEDOUT: 'Kết nối timeout. Kiểm tra mạng hoặc firewall.',
+      };
+      return {
+        connected: false,
+        code: connectionError.code,
+        message: messages[connectionError.code || ''] || connectionError.message,
+      };
     }
   }
 

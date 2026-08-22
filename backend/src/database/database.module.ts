@@ -15,6 +15,7 @@ import { Knowledge } from '../entities/knowledge.entity';
 import { SqlTemplate } from '../entities/sql-template.entity';
 import { SqlHistory } from '../entities/sql-history.entity';
 import { Note } from '../entities/note.entity';
+import { DatabaseProfile } from '../entities/database-profile.entity';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { Note } from '../entities/note.entity';
           SqlTemplate,
           SqlHistory,
           Note,
+          DatabaseProfile,
         ],
         synchronize: true,
         logging: false,
@@ -59,6 +61,7 @@ import { Note } from '../entities/note.entity';
       SqlTemplate,
       SqlHistory,
       Note,
+      DatabaseProfile,
     ]),
   ],
   exports: [TypeOrmModule],

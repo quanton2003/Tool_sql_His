@@ -1,9 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Card, Form, Input, Button, Typography, Space, Tag, message, Row, Col } from 'antd';
+import { Card, Form, Input, Button, Typography, Space, Tag, message, Row, Col, List, Popconfirm } from 'antd';
 import { DatabaseOutlined, CloudSyncOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import api from '../services/api';
 
 const { Title } = Typography;
+
+interface DatabaseProfile {
+  id: number;
+  name: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  schema: string;
+  isActive: boolean;
+}
 
 export default function Settings() {
   const [companyForm] = Form.useForm();
@@ -11,10 +23,43 @@ export default function Settings() {
   const [companyStatus, setCompanyStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [appStatus, setAppStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [loading, setLoading] = useState(false);
+  const [profiles, setProfiles] = useState<DatabaseProfile[]>([]);
+  const [profileForm] = Form.useForm();
 
   useEffect(() => {
     fetchSettings();
+    fetchProfiles();
   }, []);
+
+  const fetchProfiles = async () => {
+    try {
+      const response = await api.get('/database-profiles');
+      setProfiles(response.data);
+    } catch { /* profiles are optional */ }
+  };
+
+  const saveProfile = async (values: any) => {
+    try {
+      await api.post('/database-profiles', { ...values, port: Number(values.port) || 5432, isActive: false });
+      profileForm.resetFields();
+      fetchProfiles();
+      message.success('Đã lưu database profile');
+    } catch { message.error('Không thể lưu database profile'); }
+  };
+
+  const activateProfile = async (id: number) => {
+    try {
+      await api.post(`/database-profiles/${id}/activate`);
+      await fetchProfiles();
+      await fetchSettings();
+      message.success('Đã chuyển database đang dùng');
+    } catch { message.error('Không thể chuyển database profile'); }
+  };
+
+  const deleteProfile = async (id: number) => {
+    try { await api.delete(`/database-profiles/${id}`); fetchProfiles(); }
+    catch { message.error('Không thể xóa database profile'); }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -53,11 +98,11 @@ export default function Settings() {
         message.success('Kết nối Company Database thành công');
       } else {
         setCompanyStatus('offline');
-        message.error('Kết nối Company Database thất bại');
+        message.error(response.data.message || 'Kết nối Company Database thất bại');
       }
-    } catch {
+    } catch (error: any) {
       setCompanyStatus('offline');
-      message.error('Kết nối Company Database thất bại');
+      message.error(error?.response?.data?.message || 'Kết nối Company Database thất bại');
     } finally {
       setLoading(false);
     }
@@ -147,6 +192,32 @@ export default function Settings() {
   return (
     <div>
       <Title level={4}>Settings</Title>
+
+      <Card title="Database profiles" style={{ marginBottom: 16 }}>
+        <Form form={profileForm} layout="inline" onFinish={saveProfile} style={{ marginBottom: 16 }}>
+          <Form.Item name="name" rules={[{ required: true, message: 'Nhập tên' }]}><Input placeholder="Tên profile" /></Form.Item>
+          <Form.Item name="host" rules={[{ required: true, message: 'Nhập host' }]}><Input placeholder="Host" /></Form.Item>
+          <Form.Item name="port" initialValue={5432}><Input placeholder="Port" style={{ width: 90 }} /></Form.Item>
+          <Form.Item name="database" rules={[{ required: true, message: 'Nhập database' }]}><Input placeholder="Database" /></Form.Item>
+          <Form.Item name="username" rules={[{ required: true, message: 'Nhập user' }]}><Input placeholder="Username" /></Form.Item>
+          <Form.Item name="password"><Input.Password placeholder="Password" /></Form.Item>
+          <Form.Item name="schema" initialValue="public"><Input placeholder="Schema" style={{ width: 110 }} /></Form.Item>
+          <Button type="primary" htmlType="submit">Thêm profile</Button>
+        </Form>
+        <List
+          size="small"
+          dataSource={profiles}
+          locale={{ emptyText: 'Chưa có profile lưu cục bộ' }}
+          renderItem={(profile) => (
+            <List.Item actions={[
+              profile.isActive ? <Tag color="green">Đang dùng</Tag> : <Button size="small" onClick={() => activateProfile(profile.id)}>Dùng profile</Button>,
+              <Popconfirm title="Xóa profile này?" onConfirm={() => deleteProfile(profile.id)}><Button size="small" danger>Xóa</Button></Popconfirm>,
+            ]}>
+              <List.Item.Meta title={profile.name} description={`${profile.username}@${profile.host}:${profile.port}/${profile.database}`} />
+            </List.Item>
+          )}
+        />
+      </Card>
 
       <Card
         title={
