@@ -232,6 +232,16 @@ export class SqlQueryService {
   }
 
   async generateAiSql(request: string): Promise<{ sql: string; explanation?: string }> {
+    const patientCode = this.extractExplicitPatientCode(request);
+    if (patientCode) {
+      return {
+        sql: `SELECT patientid, patientcode, patientname, birthdayyear, birthdaymonth, birthdayday, dm_gioitinhid, patientphone, patient_cmtnd, diachi\nFROM public.tb_patient\nWHERE patientcode = '${patientCode}'\nLIMIT 100;`,
+        explanation: `Đã nhận diện mã bệnh nhân ${patientCode} và tạo truy vấn trực tiếp trên tb_patient. Mã được giữ dạng chuỗi trong dấu nháy đơn. Chưa tự động thực thi.`,
+      };
+    }
+    if (process.env.OPENAI_API_KEY) {
+      return this.generateWithOpenAi(request);
+    }
     const snapshot = await this.snapshotRepository.findOne({ where: { status: 'success' }, order: { createdAt: 'DESC' } });
     if (!snapshot) throw new Error('Chưa có schema snapshot. Hãy đồng bộ cấu trúc trước.');
 
@@ -328,9 +338,97 @@ LIMIT 100;`;
     const projection = (selectedColumns.length > 0 ? selectedColumns : columns).slice(0, 20).map((column) => `"${column.columnName}"`).join(', ');
     const limit = /tat ca|toan bo|\ball\b/i.test(normalizedRequest) ? '' : '\nLIMIT 100';
     const sql = `SELECT ${projection || '*'}\nFROM "${snapshot.schemaName}"."${table.tableName}"${limit};`;
+    const explicitSql = this.applyExplicitPatientCode(sql, request);
     return {
-      sql,
+      sql: explicitSql,
       explanation: `Đã chọn bảng ${snapshot.schemaName}.${table.tableName} theo từ khóa và schema hiện có${tableKnowledge.length > 0 ? ', có dùng Knowledge đã xác nhận' : ''}. SQL chỉ đọc dữ liệu và không tự động thực thi.`,
     };
+  }
+
+  private async generateWithOpenAi(request: string): Promise<{ sql: string; explanation?: string }> {
+    const schema = await this.getSchemaData();
+    const knowledge = await this.knowledgeRepository.find({ order: { status: 'ASC', updatedAt: 'DESC' }, take: 120 });
+    const requestWords = request.toLowerCase().split(/\s+/).filter((word) => word.length > 2);
+    const history = await this.sqlHistoryRepository.find({ where: { status: 'success' }, order: { createdAt: 'DESC' }, take: 80 });
+    const historyScore = (item: SqlHistory) => requestWords.reduce((score, word) => {
+      const haystack = `${item.request} ${item.sql}`.toLowerCase();
+      return score + (haystack.includes(word) ? 2 : 0);
+    }, 0);
+    const relatedHistory = history
+      .map((item) => ({ item, score: historyScore(item) }))
+      .filter(({ score }) => score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 8)
+      .map(({ item }) => ({ request: item.request, sql: item.sql.replace(/'(?:''|[^'])*'/g, ':value').replace(/\b\d{3,}\b/g, ':number') }));
+    const relatedKnowledge = knowledge.filter((item) => {
+      const haystack = `${item.tableName} ${item.columnName} ${item.meaning}`.toLowerCase();
+      return requestWords.some((word) => haystack.includes(word)) || /patient|benh|kham|medical|bhyt|department|room/.test(haystack);
+    }).slice(0, 80);
+    const knowledgeTables = new Set(relatedKnowledge.map((item) => item.tableName));
+    const rankedTables = schema.tables.map((table) => ({
+      table,
+      score: (knowledgeTables.has(table.name) ? 10 : 0) + requestWords.reduce((score, word) => score + (table.name.toLowerCase().includes(word) ? 3 : 0), 0),
+    })).sort((left, right) => right.score - left.score);
+    const compactSchema = {
+      tables: rankedTables.slice(0, 80).map(({ table }) => ({
+        name: table.name,
+        columns: schema.columns.filter((column) => column.tableId === table.id).slice(0, 40).map((column) => ({ name: column.name, type: column.type })),
+      })).filter((table) => table.columns.length > 0),
+      relations: schema.relations.slice(0, 150),
+    };
+    const knowledgeContext = relatedKnowledge.map((item) => ({ table: item.tableName, column: item.columnName, meaning: item.meaning }));
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        temperature: 0.1,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: 'Bạn là chuyên gia PostgreSQL cho HIS. Chỉ sinh truy vấn SELECT hoặc WITH. Không INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE. Chỉ dùng bảng/cột có trong schema. Hãy học cách nối bảng từ Knowledge và các SQL lịch sử, nhưng không sao chép giá trị mẫu đã được che thành :value hoặc :number. Trả JSON đúng dạng {"sql":"...", "explanation":"..."}. Nếu người dùng đã cung cấp mã bệnh nhân, phải đặt trực tiếp trong SQL dạng chuỗi có dấu nháy đơn, ví dụ patientcode = \'26135481\', không đổi thành :name. Luôn thêm LIMIT 100 nếu không phải truy vấn tổng hợp.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({ request, schema: compactSchema, knowledge: knowledgeContext, successful_sql_patterns: relatedHistory }),
+          },
+        ],
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      this.logger.error(`OpenAI request failed (${response.status}): ${detail.slice(0, 300)}`);
+      throw new BadRequestException('Không thể gọi OpenAI. Kiểm tra OPENAI_API_KEY và model trong file .env.');
+    }
+    const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = payload.choices?.[0]?.message?.content;
+    if (!content) throw new BadRequestException('OpenAI không trả về SQL.');
+    let result: { sql?: string; explanation?: string };
+    try { result = JSON.parse(content); } catch { throw new BadRequestException('OpenAI trả về định dạng không hợp lệ.'); }
+    if (!result.sql || !this.validateSql(result.sql).valid) {
+      throw new BadRequestException('SQL do OpenAI sinh ra không vượt qua chế độ chỉ đọc.');
+    }
+    const sql = this.applyExplicitPatientCode(result.sql, request);
+    return { sql, explanation: `${result.explanation || 'SQL được OpenAI đề xuất.'} Chưa tự động thực thi; database HIS chỉ được đọc.` };
+  }
+
+  private applyExplicitPatientCode(sql: string, request: string) {
+    const patientCode = this.extractExplicitPatientCode(request);
+    if (!patientCode) return sql;
+    const withoutDuplicatePatientFilter = sql.replace(/(\bWHERE\s+patientcode\s*=\s*'[^']*')\s+WHERE\s+patientcode\s*=\s*'[^']*'/gi, '$1');
+    if (!/\bpatientcode\b/i.test(sql)) {
+      return `SELECT patientid, patientcode, patientname, birthdayyear, birthdaymonth, birthdayday, dm_gioitinhid, patientphone, patient_cmtnd, diachi\nFROM public.tb_patient\nWHERE patientcode = '${patientCode}'\nLIMIT 100;`;
+    }
+    const quotedCode = `'${patientCode}'`;
+    const replaced = withoutDuplicatePatientFilter.replace(/(patientcode\s*=\s*)(?::[A-Za-z_][A-Za-z0-9_]*|'[^']*'|[A-Za-z0-9_-]+)/i, `$1${quotedCode}`);
+    if (replaced !== withoutDuplicatePatientFilter) return replaced;
+    return withoutDuplicatePatientFilter.replace(/\s+LIMIT\s+\d+\s*;?\s*$/i, `\nWHERE patientcode = ${quotedCode}\nLIMIT 100;`);
+  }
+
+  private extractExplicitPatientCode(request: string) {
+    const match = request.match(/\b(?:mã|ma)\b(?:\s+(?:bệnh\s+nhân|benh\s+nhan))?(?:\s+(?:là|la|:|=))?\s*([0-9][A-Za-z0-9_-]*)/i)
+      || request.match(/\bpatientcode\b\s*(?:là|la|:|=)?\s*([A-Za-z0-9_-]+)/i);
+    return match?.[1].replace(/'/g, "''");
   }
 }

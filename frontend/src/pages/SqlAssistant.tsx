@@ -83,11 +83,16 @@ export default function SqlAssistant() {
 
 const styles: Record<string, React.CSSProperties> = {
   sqlBlock: {
-    background: '#f5f5f5',
+    background: '#0b161c',
+    color: '#bfe7df',
+    border: '1px solid #2d5559',
     padding: 12,
     borderRadius: 6,
     overflow: 'auto',
     fontFamily: 'monospace',
     fontSize: 14,
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
   },
 };
