@@ -12,7 +12,7 @@ async function bootstrap() {
       'http://127.0.0.1:5173',
       'http://localhost:5174',
       'http://127.0.0.1:5174',
-      'https://your-app.vercel.app',
+      'https://tool-sql-6hrsg30q5-quanton2003.vercel.app',
       /\.vercel\.app$/,
     ],
     credentials: true,
