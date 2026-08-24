@@ -1,6 +1,7 @@
-import { Layout, Menu, Typography, Tag } from 'antd';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { AppstoreOutlined, DatabaseOutlined, ExperimentOutlined, FileSearchOutlined, BookOutlined, HistoryOutlined, SettingOutlined, RobotOutlined } from '@ant-design/icons';
+import { Layout, Menu, Typography, Tag, Button, Dropdown, Space, Avatar } from 'antd';
+import { Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { AppstoreOutlined, DatabaseOutlined, ExperimentOutlined, FileSearchOutlined, BookOutlined, HistoryOutlined, SettingOutlined, RobotOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -21,6 +22,23 @@ const pageNames: Record<string, string> = Object.fromEntries(menuItems.map((item
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { username, logout, isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const userMenuItems = [
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: 'Đăng xuất',
+      onClick: () => {
+        logout();
+        navigate('/login');
+      },
+    },
+  ];
 
   return (
     <Layout className="app-shell" style={{ minHeight: '100vh' }}>
@@ -44,7 +62,15 @@ export default function AppLayout() {
             <Text className="eyebrow">HIS SQL ASSISTANT / LOCAL</Text>
             <h1>{pageNames[location.pathname] || 'Tổng quan'}</h1>
           </div>
-          <Tag className="local-tag" icon={<span className="status-dot" />}>Local only</Tag>
+          <Space size="middle">
+            <Tag className="local-tag" icon={<span className="status-dot" />}>Local only</Tag>
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 12px', borderRadius: 8, background: 'rgba(54, 181, 168, 0.1)', border: '1px solid rgba(54, 181, 168, 0.2)' }}>
+                <Avatar size="small" icon={<UserOutlined />} style={{ background: '#36b5a8' }} />
+                <Text style={{ color: '#e7f0ed', fontSize: 13 }}>{username}</Text>
+              </div>
+            </Dropdown>
+          </Space>
         </Header>
         <Content className="app-content">
           <Outlet />

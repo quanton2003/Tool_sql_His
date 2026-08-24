@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { HealthModule } from './health/health.module';
 import { DatabaseModule } from './database/database.module';
 import { CompanyDatabaseModule } from './company-database/company-database.module';
@@ -10,10 +11,13 @@ import { KnowledgeModule } from './knowledge/knowledge.module';
 import { SettingsModule } from './settings/settings.module';
 import { SqlQueryModule } from './sql-query/sql-query.module';
 import { DatabaseProfilesModule } from './database-profiles/database-profiles.module';
+import { AuthModule } from './auth/auth.module';
+import { AuthGuard } from './auth/auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '../.env' }),
+    AuthModule,
     HealthModule,
     DatabaseModule,
     CompanyDatabaseModule,
@@ -26,6 +30,11 @@ import { DatabaseProfilesModule } from './database-profiles/database-profiles.mo
     DatabaseProfilesModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+  ],
 })
 export class AppModule {}
