@@ -21,29 +21,60 @@ import { DatabaseProfile } from '../entities/database-profile.entity';
   imports: [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'better-sqlite3',
-        database: configService.get<string>('APP_DB_PATH', './data/app.sqlite'),
-        entities: [
-          Setting,
-          CompanyDbSnapshot,
-          CompanySchema,
-          CompanyTable,
-          CompanyColumn,
-          CompanyPrimaryKey,
-          CompanyForeignKey,
-          CompanyIndex,
-          CompanyRelation,
-          ChucNang,
-          Knowledge,
-          SqlTemplate,
-          SqlHistory,
-          Note,
-          DatabaseProfile,
-        ],
-        synchronize: true,
-        logging: false,
-      }),
+      useFactory: (configService: ConfigService) => {
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        if (databaseUrl) {
+          return {
+            type: 'postgres',
+            url: databaseUrl,
+            entities: [
+              Setting,
+              CompanyDbSnapshot,
+              CompanySchema,
+              CompanyTable,
+              CompanyColumn,
+              CompanyPrimaryKey,
+              CompanyForeignKey,
+              CompanyIndex,
+              CompanyRelation,
+              ChucNang,
+              Knowledge,
+              SqlTemplate,
+              SqlHistory,
+              Note,
+              DatabaseProfile,
+            ],
+            synchronize: true,
+            logging: false,
+            ssl: {
+              rejectUnauthorized: false,
+            },
+          };
+        }
+        return {
+          type: 'better-sqlite3',
+          database: configService.get<string>('APP_DB_PATH', './data/app.sqlite'),
+          entities: [
+            Setting,
+            CompanyDbSnapshot,
+            CompanySchema,
+            CompanyTable,
+            CompanyColumn,
+            CompanyPrimaryKey,
+            CompanyForeignKey,
+            CompanyIndex,
+            CompanyRelation,
+            ChucNang,
+            Knowledge,
+            SqlTemplate,
+            SqlHistory,
+            Note,
+            DatabaseProfile,
+          ],
+          synchronize: true,
+          logging: false,
+        };
+      },
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([
