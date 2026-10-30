@@ -1,227 +1,129 @@
-# HIS SQL Assistant v2
+# HIS SQL Assistant v2 (Chạy 100% Local)
 
-Công cụ hỗ trợ viết SQL cho hệ thống thông tin bệnh viện (HIS).
+Công cụ hỗ trợ viết và phân tích SQL cho hệ thống thông tin bệnh viện (HIS). Toàn bộ dữ liệu được lưu trữ và vận hành cục bộ (Local) trên SQLite kết nối an toàn với cơ sở dữ liệu công ty (PostgreSQL - Read Only).
 
-## Tính năng
+---
 
-### Dashboard
-- Thống kê số chức năng, knowledge items, SQL generated, confirmed knowledge
-- Hiển thị thông tin schema snapshot
+## 🚀 Khởi chạy nhanh (1-Click)
 
-### Chức năng (`/app/chuc-nang`)
-- CRUD đầy đủ: thêm/sửa/xóa chức năng
-- Tìm kiếm theo tên
-- Trạng thái active/inactive
-
-### Tra cứu Database (`/app/tra-cuu-database`)
-- Đọc thông tin schema từ PostgreSQL (read-only)
-- Đồng bộ cấu trúc database về SQLite
-- Tìm kiếm bảng, xem chi tiết cột (kiểu dữ liệu, nullable, PK, FK)
-- Test kết nối Company DB
-
-### Knowledge (`/app/knowledge`)
-- CRUD: lưu ý nghĩa bảng/cột
-- Trạng thái: suggested / confirmed / unknown / rejected
-- Tìm kiếm theo tên bảng/cột
-
-### SQL History (`/app/history`)
-- Lịch sử SQL đã tạo (request, sql, status, timestamp)
-
-### Settings (`/app/settings`)
-- Cấu hình Company HIS Database (PostgreSQL)
-- Test kết nối, sync schema
-- Reload config không cần restart backend
-
-## Yêu cầu
-
-- Node.js >= 20
-- npm >= 10
-- Git
-
-## Cài đặt
-
-```powershell
-git clone <repository-url>
-cd duan_sqlhis
-
-cd backend
-npm install
-
-cd ../frontend
-npm install
+### Cách 1: Chạy file batch (Windows)
+Double click vào file:
+```
+start-local.bat
 ```
 
-## Chạy ứng dụng
-
-```powershell
-# Backend
-cd backend
-npm run start:dev
-# Chạy tại: http://localhost:3000
-
-# Frontend
-cd frontend
+### Cách 2: Chạy lệnh từ thư mục gốc
+```bash
 npm run dev
-# Chạy tại: http://localhost:5173
 ```
+Lệnh này sẽ tự động chạy đồng thời cả **Backend** (`http://localhost:3000`) và **Frontend** (`http://localhost:5173`).
 
-## Cấu trúc
+---
 
-```
-duan_sqlhis/
-├── frontend/          # React + Vite + TypeScript + Ant Design
-│   ├── src/
-│   │   ├── pages/     # Dashboard, ChucNang, TraCuuDatabase, Knowledge, History, Settings
-│   │   ├── components/# Layout, shared components
-│   │   ├── services/  # API client
-│   │   └── App.tsx
-├── backend/           # NestJS + TypeScript
-│   ├── src/
-│   │   ├── chuc-nang/        # Chức năng module
-│   │   ├── knowledge/        # Knowledge module
-│   │   ├── company-database/ # Company database connection (PostgreSQL)
-│   │   ├── database/         # TypeORM + SQLite config
-│   │   ├── schema-snapshot/  # Schema sync service
-│   │   ├── settings/         # Settings module (SQLite)
-│   │   ├── health/           # Health check
-│   │   ├── entities/         # TypeORM entities
-│   │   └── main.ts
-├── data/              # SQLite database files (app.sqlite)
-└── .env               # Environment variables (HIS_DB_*, PORT, APP_DB_PATH)
-```
+## 🔐 Tài khoản đăng nhập mặc định (Local)
 
-## API Endpoints
+Hệ thống đã hỗ trợ các tài khoản đăng nhập cục bộ:
+- **Tài khoản 1:** `quannh` / Mật khẩu: `admin123` (hoặc `123456`)
+- **Tài khoản 2:** `admin` / Mật khẩu: `admin123`
 
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/api/health` | Health check |
-| GET | `/api/settings` | Lấy tất cả settings |
-| POST | `/api/settings` | Tạo setting |
-| PUT | `/api/settings/:key` | Cập nhật setting |
-| GET | `/api/chuc-nang` | Danh sách chức năng |
-| POST | `/api/chuc-nang` | Tạo chức năng |
-| PATCH | `/api/chuc-nang/:id` | Cập nhật chức năng |
-| DELETE | `/api/chuc-nang/:id` | Xóa chức năng |
-| GET | `/api/knowledge` | Danh sách knowledge |
-| POST | `/api/knowledge` | Tạo knowledge |
-| PATCH | `/api/knowledge/:id` | Cập nhật knowledge |
-| DELETE | `/api/knowledge/:id` | Xóa knowledge |
-| POST | `/api/database/company/test-connection` | Test kết nối Company DB |
-| POST | `/api/database/company/sync-schema` | Đồng bộ schema về SQLite |
-| POST | `/api/database/company/reload-config` | Reload config Company DB |
-| GET | `/api/database/schemas` | Danh sách schemas từ snapshot |
-| GET | `/api/database/tables?schema=` | Danh sách tables |
-| GET | `/api/database/tables/:tableName/columns?schema=` | Chi tiết columns |
+---
 
-## Công nghệ
+## 🛠️ Các lệnh hữu ích (Root)
 
-**Backend:**
-- NestJS + TypeScript
-- TypeORM + SQLite (local) + PostgreSQL (read-only)
-- class-validator, CORS
+| Lệnh | Chức năng |
+|------|-----------|
+| `npm run dev` | Khởi chạy cả Backend và Frontend đồng thời |
+| `npm run dev:backend` | Chỉ chạy Backend (NestJS development mode) |
+| `npm run dev:frontend` | Chỉ chạy Frontend (Vite development mode) |
+| `npm run build` | Build production cho cả Backend & Frontend |
+| `npm run start` | Chạy Backend bản production build |
+| `npm run install:all` | Cài đặt toàn bộ dependencies |
 
-**Frontend:**
-- React 18 + Vite + TypeScript
-- Ant Design v5
-- Axios
+---
 
-## Cấu hình Database
+## 📋 Tính năng chính
 
-### Cách hoạt động
+### 1. Dashboard
+- Thống kê số lượng chức năng (101 chức năng), Knowledge items, SQL generated, Schema snapshots.
 
-Hệ thống lưu cấu hình database trong **SQLite** (bảng `settings`), KHÔNG đọc trực tiếp từ `.env` mỗi lần chạy.
+### 2. Chức năng (`/app/chuc-nang`)
+- CRUD đầy đủ: thêm / sửa / xóa chức năng nghiệp vụ HIS.
+- Tìm kiếm nhanh, lọc theo trạng thái active/inactive.
 
-- File `.env` chỉ dùng làm **giá trị mặc định** khi setting chưa tồn tại (lần đầu khởi động)
-- Sau đó, mọi thay đổi cấu hình được lưu trong SQLite
-- Để thay đổi cấu hình: vào **Settings UI** hoặc gọi API trực tiếp
+### 3. Tra cứu Database (`/app/tra-cuu-database`)
+- Đọc thông tin schema từ PostgreSQL công ty (read-only).
+- Đã lưu trữ snapshot hơn 384.000 cột, 15.000 bảng vào SQLite cục bộ.
+- Tìm kiếm bảng, xem chi tiết cột (kiểu dữ liệu, nullable, PK, FK).
+- Test kết nối Company DB trực tiếp.
 
-### File .env
+### 4. SQL Query & Assistant (`/app/sql-query`, `/app/sql-assistant`)
+- Trình soạn thảo và thực thi truy vấn SQL có kiểm soát (chỉ cho phép `SELECT`, `WITH`, `EXPLAIN`, chặn tuyệt đối câu lệnh ghi/xóa `INSERT`, `UPDATE`, `DELETE`, `DROP`).
+- Tự động gợi ý từ khóa, bảng và cột từ schema snapshot.
+- Hỗ trợ AI sinh câu lệnh SQL dựa trên nghiệp vụ HIS.
 
+### 5. Knowledge (`/app/knowledge`)
+- Ghi nhận và chuẩn hóa ý nghĩa các bảng và cột viết tắt trong hệ thống HIS.
+
+### 6. Settings (`/app/settings`)
+- Cấu hình thông số kết nối Database bệnh viện (Host, Port, Database, User, Password, Schema).
+- Kiểm tra kết nối và reload cấu hình trực tiếp mà không cần khởi động lại server.
+
+---
+
+## ⚙️ Cấu hình Local (`.env`)
+
+File `.env` nằm tại thư mục gốc của dự án:
 ```env
+PORT=3000
+
 # Company HIS Database (PostgreSQL) - READ ONLY
-HIS_DB_HOST=ehcg1.ddns.net
-HIS_DB_PORT=7001
-HIS_DB_NAME=test_bvducgiang
-HIS_DB_USER=ictu_test
-HIS_DB_PASSWORD=ictu_test
+HIS_DB_HOST=27.72.192.2
+HIS_DB_PORT=6688
+HIS_DB_NAME=bvducgiang
+HIS_DB_USER=postgres
+HIS_DB_PASSWORD=bvEHC@123@
 HIS_DB_SCHEMA=public
 
-# App
-PORT=3000
+# App Database (SQLite lưu trữ toàn bộ dữ liệu nội bộ)
 APP_DB_PATH=./data/app.sqlite
+
+# JWT Secret
+JWT_SECRET=his-secret-key-2026-local
+
+# OpenAI (tùy chọn cho tính năng AI sinh SQL)
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-### Cấu hình qua Settings UI
+---
 
-1. Mở http://localhost:5173/app/settings
-2. Nhập thông tin database
-3. Nhấn **"Kiểm tra kết nối"** để test
-4. Nhấn **"Lưu cấu hình"**
-5. Nhấn **"Đồng bộ cấu trúc"** để sync schema về SQLite
+## 🏗️ Cấu trúc dự án
 
-### Cấu hình qua API
-
-```powershell
-# Test kết nối
-POST /api/database/company/test-connection
-
-# Reload config (sau khi thay đổi settings)
-POST /api/database/company/reload-config
-
-# Đồng bộ schema
-POST /api/database/company/sync-schema
-Body: { "databaseName": "test_bvducgiang", "schemaName": "public" }
 ```
-
-## Xử lý sự cố
-
-### Lỗi "password authentication failed"
-
-**Nguyên nhân:** Sai username hoặc password.
-
-**Cách khắc phục:**
-1. Kiểm tra credentials đúng với database admin
-2. Cập nhật qua Settings UI hoặc API:
-   ```powershell
-   PUT /api/settings/HIS_DB_USER
-   Body: { "value": "username" }
-   
-   PUT /api/settings/HIS_DB_PASSWORD
-   Body: { "value": "password" }
-   ```
-3. Reload config và test lại
-
-### Lỗi "database does not exist"
-
-**Nguyên nhân:** Tên database không đúng hoặc user không có quyền truy cập.
-
-**Cách khắc phục:**
-- Kiểm tra tên database đúng (phân biệt hoa thường)
-- Kiểm tra user có quyền truy cập database đó
-
-### Lỗi "Connection terminated unexpectedly" / "ECONNREFUSED"
-
-**Nguyên nhân:** Sai host/port hoặc firewall chặn.
-
-**Cách khắc phục:**
-- Kiểm tra host và port đúng
-- Kiểm tra firewall cho phép kết nối
-- Đảm bảo PostgreSQL server đang chạy và accept remote connections
-
-### Reset về cấu hình mặc định từ .env
-
-Nếu muốn reset settings về giá trị trong `.env`:
-
-```powershell
-# Xóa settings cũ (từng key một)
-DELETE từ bảng settings trong SQLite
-# Hoặc xóa file SQLite và tạo lại
-Remove-Item backend/data/app.sqlite
-# Khởi động lại backend - SettingsInitializerService sẽ tạo lại từ .env
+Tool_sql_His/
+├── start-local.bat    # File kích hoạt 1-click chạy cả Backend & Frontend
+├── package.json       # Quản lý script khởi chạy root
+├── .env               # Cấu hình biến môi trường
+├── data/
+│   └── app.sqlite     # Database SQLite cục bộ (chứa snapshot, chức năng, knowledge)
+├── backend/           # NestJS 10 + TypeORM (SQLite + pg Pool)
+│   ├── src/
+│   │   ├── auth/             # Xác thực JWT & Guard
+│   │   ├── chuc-nang/        # Quản lý danh mục chức năng HIS
+│   │   ├── company-database/ # Kết nối an toàn read-only tới DB công ty
+│   │   ├── database/         # Cấu hình TypeORM thông minh tìm SQLite DB
+│   │   ├── knowledge/        # Tri thức nghiệp vụ bảng/cột
+│   │   ├── schema-snapshot/  # Snapshot cấu trúc bảng/cột
+│   │   ├── settings/         # Cấu hình động lưu trong DB
+│   │   ├── sql-query/        # Bộ thực thi & AI sinh SQL
+│   │   └── main.ts           # Điểm khởi chạy NestJS, cấu hình CORS local
+│   └── data/
+│       └── app.sqlite
+└── frontend/          # React + Vite + TypeScript + Ant Design v5
+    ├── src/
+    │   ├── pages/            # Dashboard, ChucNang, SqlQuery, Knowledge, Settings...
+    │   ├── components/       # Layout và UI components
+    │   ├── services/         # Axios API Client
+    │   └── App.tsx           # Router & Theme
+    └── vite.config.ts        # Proxy /api -> http://localhost:3000
 ```
-
-### Lưu ý quan trọng
-
-- **Port 6688** thường là cổng SSH, không phải PostgreSQL. PostgreSQL mặc định chạy trên port 5432.
-- **DDNS hostname** (ehcg1.ddns.net) có thể resolve về IP khác (27.72.192.2). Nên dùng hostname thay vì IP trừ khi biết chắc IP tĩnh.
-- Sau khi thay đổi settings, **phải reload config** để có hiệu lực.

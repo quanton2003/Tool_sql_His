@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import * as path from 'path';
+import * as fs from 'fs';
 import { Setting } from '../entities/setting.entity';
 import { CompanyDbSnapshot } from '../entities/company-db-snapshot.entity';
 import { CompanySchema } from '../entities/company-schema.entity';
@@ -51,9 +53,26 @@ import { DatabaseProfile } from '../entities/database-profile.entity';
             },
           };
         }
+
+        // Smart SQLite path resolution: works both from root and from backend directory
+        const configuredPath = configService.get<string>('APP_DB_PATH');
+        let resolvedDbPath: string;
+
+        if (configuredPath && fs.existsSync(configuredPath)) {
+          resolvedDbPath = configuredPath;
+        } else {
+          const candidates = [
+            path.resolve(process.cwd(), 'data/app.sqlite'),
+            path.resolve(process.cwd(), 'backend/data/app.sqlite'),
+            path.resolve(__dirname, '../../data/app.sqlite'),
+            path.resolve(__dirname, '../../../data/app.sqlite'),
+          ];
+          resolvedDbPath = candidates.find((p) => fs.existsSync(p)) || path.resolve(process.cwd(), 'data/app.sqlite');
+        }
+
         return {
           type: 'better-sqlite3',
-          database: configService.get<string>('APP_DB_PATH', './data/app.sqlite'),
+          database: resolvedDbPath,
           entities: [
             Setting,
             CompanyDbSnapshot,

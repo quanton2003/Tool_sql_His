@@ -29,9 +29,7 @@ export class AuthGuard implements CanActivate {
     }
 
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET || 'his-secret-key-2026',
-      });
+      const payload = await this.jwtService.verifyAsync(token);
       (request as any)['user'] = payload;
     } catch {
       throw new UnauthorizedException('Token không hợp lệ hoặc đã hết hạn');

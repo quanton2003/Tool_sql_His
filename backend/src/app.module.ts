@@ -16,7 +16,10 @@ import { AuthGuard } from './auth/auth.guard';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '../.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', '../.env', 'backend/.env'],
+    }),
     AuthModule,
     HealthModule,
     DatabaseModule,
